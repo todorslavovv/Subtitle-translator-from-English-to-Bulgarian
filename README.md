@@ -113,4 +113,4 @@ The checkpoint is automatically deleted when translation reaches 100%.
 
 ## License
 
-MIT
+GNU General Public License v3.0

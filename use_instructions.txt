@@ -1,0 +1,158 @@
+╔══════════════════════════════════════════════════════════════╗
+║         Subtitle Translator — English → Bulgarian           ║
+║              (local Ollama · gemma4 · Cyrillic)              ║
+╚══════════════════════════════════════════════════════════════╝
+
+
+┌─ 1. PREREQUISITES ──────────────────────────────────────────────────────┐
+│                                                                         │
+│  • Python 3.10+                                                        │
+│  • Ollama installed & running (https://ollama.com)                     │
+│  • A Gemma4 model pulled locally, e.g.:                                │
+│      ollama pull gemma4:e2b                                            │
+│  • ~4‑8 GB free RAM (model dependent)                                  │
+│  • Internet on first run (model download)                              │
+│                                                                         │
+│  The script auto-detects missing Ollama and attempts installation       │
+│  on Linux / macOS. On Windows, install manually from the URL above.    │
+└─────────────────────────────────────────────────────────────────────────┘
+
+
+┌─ 2. CLI SYNTAX ─────────────────────────────────────────────────────────┐
+│                                                                         │
+│  python subs_translator.py [options] <input_file(s)_or_directory>      │
+│                                                                         │
+│  REQUIRED                                                               │
+│    input              One or more .srt / .ass files, or a directory     │
+│                       containing them                                   │
+│                                                                         │
+│  OPTIONS                                                                │
+│    -m, --model TEXT   Ollama model name                                 │
+│                       (default: gemma4:e2b)                             │
+│                                                                         │
+│    -p, --port NUM     Ollama API port (default: 11434)                  │
+│                                                                         │
+│    -o, --output-dir   Output directory                                 │
+│                       (default: same folder as source)                   │
+│                                                                         │
+│    --test N           Translate only the first N subtitle blocks        │
+│                       (use for quick validation before full run)        │
+│                                                                         │
+│    --resume            Resume from checkpoint (if previous run was      │
+│                        interrupted)                                     │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+
+┌─ 3. EXAMPLES ───────────────────────────────────────────────────────────┐
+│                                                                         │
+│  # Basic usage                                                          │
+│  python subs_translator.py episode.srt                                  │
+│                                                                         │
+│  # Translate a whole directory                                          │
+│  python subs_translator.py ./subtitles/                                 │
+│                                                                         │
+│  # Use a different model                                                │
+│  python subs_translator.py -m gemma4:e4b episode.srt                    │
+│                                                                         │
+│  # Quick test — only 5 blocks                                           │
+│  python subs_translator.py --test 5 episode.srt                         │
+│                                                                         │
+│  # Resume after interrupt                                               │
+│  python subs_translator.py --resume episode.srt                         │
+│                                                                         │
+│  # Combined: test + custom output dir                                   │
+│  python subs_translator.py --test 10 -o ~/output episode.ass            │
+│                                                                         │
+│  # Output is saved as: {filename}_bg.{ext}  (UTF-8)                     │
+│  # e.g. episode.srt → episode_bg.srt                                    │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+
+┌─ 4. HOW IT WORKS ───────────────────────────────────────────────────────┐
+│                                                                         │
+│  1. Environment check — verifies Ollama is installed & running          │
+│  2. Model check — pulls requested model if not present                  │
+│  3. File parsing — reads .srt or .ass, preserving all tags & metadata   │
+│  4. Sliding-window translation — for each block, the LLM receives:      │
+│       • 3 previous blocks as narrative context                          │
+│       • the current block to translate                                  │
+│       • 2 upcoming blocks for tone continuity                           │
+│  5. Output — saves the translated file as {name}_bg.{ext}               │
+│                                                                         │
+│  Engine settings (optimised for GPU):                                   │
+│    • temperature: 0.3 (consistent, low-creativity)                      │
+│    • num_predict: 64 (tight token budget for short subtitles)           │
+│    • JSON-constrained output from model                                 │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+
+┌─ 5. CHECKPOINT & RESUME ───────────────────────────────────────────────┐
+│                                                                         │
+│  The script writes a hidden checkpoint file next to the output:         │
+│    {output_filename}.checkpoint.json                                    │
+│                                                                         │
+│  • Tracks which blocks have been successfully translated                │
+│  • If the process crashes or is interrupted (Ctrl+C), just re-run       │
+│    with --resume to pick up where you left off                          │
+│  • The checkpoint is automatically deleted on 100% completion           │
+│  • Checkpoints are model-specific (mismatch is detected)                │
+│                                                                         │
+│  Resume workflow:                                                       │
+│    python subs_translator.py episode.srt           # runs, crashes      │
+│    python subs_translator.py --resume episode.srt  # continues          │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+
+┌─ 6. TROUBLESHOOTING ────────────────────────────────────────────────────┐
+│                                                                         │
+│  "Connection refused" / "Failed to connect"                             │
+│    → Ensure Ollama is running:  ollama serve                            │
+│    → Default endpoint: http://localhost:11434                           │
+│    → Check port with:  ollama list                                      │
+│                                                                         │
+│  "Model not found"                                                      │
+│    → Pull it manually:  ollama pull gemma4:e2b                          │
+│    → Or use a different model:  --model other_model_name                │
+│                                                                         │
+│  Translation timeout                                                    │
+│    → First inference is slow (cold start) — allow 1-2 min               │
+│    → On CPU: expect 10-60 sec per block; be patient                     │
+│    → On GPU: should be <1 sec per block                                 │
+│    → Retry is automatic (3 attempts)                                    │
+│                                                                         │
+│  Encoding issues in output                                              │
+│    → All output files are UTF-8                                         │
+│    → Ensure your media player supports Cyrillic subtitles               │
+│                                                                         │
+│  "ollama: command not found"                                            │
+│    → Linux/macOS: script can auto-install                               │
+│    → Windows: download from https://ollama.com                          │
+│                                                                         │
+│  Translation quality                                                    │
+│    → Sliding-window context helps with idioms and flow                  │
+│    → For best results, use a larger model (gemma4:e4b)                  │
+│    → Adjust --temperature via API if output is too literal              │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+
+┌─ 7. FORMAT SUPPORT ─────────────────────────────────────────────────────┐
+│                                                                         │
+│  .srt (SubRip)                                                          │
+│    • Preserves index numbers & timestamps                               │
+│    • Preserves <i>, <b>, <font> tags                                    │
+│    • Translates only dialogue text lines                                │
+│                                                                         │
+│  .ass (Advanced SubStation Alpha)                                       │
+│    • Preserves ALL sections ([Script Info], [V4+ Styles], [Events])    │
+│    • Translates only Dialogue: lines                                    │
+│    • Skips Comment: lines                                               │
+│    • Preserves style overrides: {\\pos...}, {\\i1}, etc.                │
+│    • Skips vector drawings ({\\p1}…{\\p0}) automatically                │
+│    • Maintains full field structure (Layer, Start, End, Style, …)      │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
